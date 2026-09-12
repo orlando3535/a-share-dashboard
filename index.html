@@ -30,6 +30,12 @@ header.top .sub b{color:var(--gold);font-weight:600}
 .idx-name{font-size:13px;color:var(--sub)}
 .idx-code{font-size:11px;color:var(--mut)}
 .idx-close{font-size:24px;font-weight:700;margin:8px 0 4px}
+.live-badge{display:inline-block;margin-left:6px;padding:1px 8px;border-radius:10px;font-size:10px;font-weight:700;color:#0d1117;background:#1fb573;vertical-align:2px;letter-spacing:.5px}
+.live-badge.off{background:#64748b;color:#e6edf6}
+.live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#1fb573;margin-right:5px;vertical-align:1px;animation:pulse 1.6s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(31,181,115,.6)}70%{box-shadow:0 0 0 6px rgba(31,181,115,0)}100%{box-shadow:0 0 0 0 rgba(31,181,115,0)}}
+.idx-live{font-size:12px;margin-top:6px;color:var(--sub)}
+.lv-time{font-size:11px;color:var(--mut);margin-top:2px}
 .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:12px;font-weight:600}
 .up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--flat)}
 .bg-up{background:rgba(242,73,92,.15)} .bg-down{background:rgba(31,181,115,.15)} .bg-flat{background:rgba(139,152,173,.15)}
@@ -108,7 +114,7 @@ footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);font-si
   <div class="sub">数据窗口 <b>2026/9/1 - 9/11</b>　|　最新交易日 <b>9/11</b>　|　覆盖 5 大指数 · 31 个申万一级行业 · 82 个细分领域 · 144 只异常股</div>
 </header>
 
-<div class="sec-title">第一部分 · 9月市场走向 <small>指数 / 行业 / 事件 / 情绪</small></div>
+<div class="sec-title">第一部分 · 9月市场走向 <small>指数 / 行业 / 事件 / 情绪　·　五大指数盘中实时刷新（约10秒/次）</small></div>
 
 <div class="grid cards5" id="idxCards"></div>
 
@@ -178,8 +184,11 @@ function fmtSep(s){
     var last=it.daily[it.daily.length-1];
     var c=pctCls(it.sep_change_pct);
     var cd=pctCls(last.change_pct);
-    html+='<div class="card"><div class="idx-name">'+name+'</div><div class="idx-code">'+it.code+'</div>'
-      +'<div class="idx-close '+c+'">'+it.sep11_close.toLocaleString('zh-CN',{maximumFractionDigits:2})+'</div>'
+    html+='<div class="card"><div class="idx-name">'+name+'<span class="live-badge off" data-badge="'+it.code+'">同步中</span></div><div class="idx-code">'+it.code+'</div>'
+      +'<div class="idx-close '+c+'" data-close="'+it.code+'">'+it.sep11_close.toLocaleString('zh-CN',{maximumFractionDigits:2})+'</div>'
+      +'<div class="idx-live" data-live="'+it.code+'">—</div>'
+      +'<div class="lv-time" data-time="'+it.code+'">等待行情…</div>'
+
       +'<div style="font-size:12px;margin-top:6px">9月累计 <span class="pill bg-'+(c==='up'?'up':(c==='down'?'down':'flat'))+' '+c+'">'+fmtPct(it.sep_change_pct)+'</span></div>'
       +'<div style="font-size:12px;margin-top:6px;color:var(--sub)">9/11 <span class="'+cd+'">'+fmtPct(last.change_pct)+'</span></div></div>';
   });
@@ -417,6 +426,52 @@ function render(){
   // search
   document.getElementById('search').addEventListener('input',function(e){state.q=e.target.value.trim();render();});
   render();
+})();
+</script>
+<script>
+/* ---------- Live quotes: 5 indices ~10s (Tencent JSONP) ---------- */
+(function(){
+  var QUOTES={'上证指数':'sh000001','深证成指':'sz399001','沪深300':'sh000300','创业板指':'sz399006','科创50':'sh000688'};
+  var order=Object.keys(QUOTES);
+  function fmt(n,d){ if(n==null||isNaN(n)) return '—'; return Number(n).toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  function pad(n){ return (n<10?'0':'')+n; }
+  function inSession(){ var d=new Date(),day=d.getDay(),mins=d.getHours()*60+d.getMinutes(); if(day===0||day===6) return false; return (mins>=570&&mins<=690)||(mins>=780&&mins<=900); }
+  function parseAndApply(){
+    var now=new Date(), tsTxt='';
+    order.forEach(function(name){
+      var v=window['v_'+QUOTES[name]]; if(!v) return;
+      var p=String(v).split('~');
+      var price=parseFloat(p[3]),prev=parseFloat(p[4]),chg=parseFloat(p[31]),pct=parseFloat(p[32]),ts=p[30]||'';
+      if(isNaN(price)||isNaN(prev)) return;
+      var code=MARKET.indices[name].code;
+      var elClose=document.querySelector('[data-close="'+code+'"]');
+      if(!elClose) return;
+      var cls=price>=prev?'up':'down';
+      elClose.textContent=fmt(price,2); elClose.className='idx-close '+cls;
+      var elLive=document.querySelector('[data-live="'+code+'"]');
+      if(elLive){ var chgTxt=(isNaN(chg)?'':(chg>0?'+':'')+chg.toFixed(2)+'　'); elLive.innerHTML='<span class="'+(cls==='up'?'up':'down')+'">'+chgTxt+fmt(pct,2)+'%</span>'; }
+      if(ts&&ts.length>=14) tsTxt=ts.slice(8,10)+':'+ts.slice(10,12)+':'+ts.slice(12,14);
+    });
+    var live=inSession();
+    var timeTxt=tsTxt||(pad(now.getHours())+':'+pad(now.getMinutes())+':'+pad(now.getSeconds()));
+    order.forEach(function(name){
+      var code=MARKET.indices[name].code;
+      var badge=document.querySelector('[data-badge="'+code+'"]');
+      if(badge){ badge.textContent=live?'实时':'收盘'; if(live)badge.classList.remove('off'); else badge.classList.add('off'); }
+      var el=document.querySelector('[data-time="'+code+'"]');
+      if(el) el.textContent=(live?'盘中行情 ':'行情 ')+timeTxt;
+    });
+  }
+  function load(){
+    var s=document.createElement('script');
+    s.src='https://qt.gtimg.cn/q='+order.map(function(n){return QUOTES[n];}).join(',')+'&_='+Date.now();
+    s.onload=function(){ try{ parseAndApply(); }catch(e){} if(s.parentNode)s.parentNode.removeChild(s); };
+    s.onerror=function(){ if(s.parentNode)s.parentNode.removeChild(s); };
+    document.head.appendChild(s);
+  }
+  document.addEventListener('visibilitychange',function(){ if(!document.hidden) load(); });
+  load();
+  setInterval(function(){ if(!document.hidden) load(); }, 10000);
 })();
 </script>
 </body>
