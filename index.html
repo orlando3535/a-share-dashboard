@@ -106,6 +106,7 @@ footer{margin-top:36px;padding-top:18px;border-top:1px solid var(--line);font-si
 .footnote{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin-top:14px;font-size:12px;color:var(--sub);line-height:1.8}
 @media(max-width:1100px){.cards5{grid-template-columns:repeat(2,1fr)}.senti-grid{grid-template-columns:repeat(2,1fr)}.summary{grid-template-columns:repeat(3,1fr)}}
 </style>
+<script src="live_data.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -429,6 +430,61 @@ function render(){
 })();
 </script>
 <script>
+/* ---------- Cloud data layer (live_data.js from GitHub Actions) ---------- */
+(function(){
+  if(!window.CLOUD_DATA) return;
+  var C=window.CLOUD_DATA;
+  function fmtN(n,d){ if(n==null||isNaN(n)) return '—'; return Number(n).toLocaleString('zh-CN',{maximumFractionDigits:(d==null?2:d)}); }
+  // 1) subtitle: cloud update time
+  var sub=document.querySelector('.top .sub');
+  if(sub && C.updated_at){
+    var sp=document.createElement('span');
+    sp.style.cssText='color:var(--gold);margin-left:8px';
+    sp.textContent='云端行情 '+C.updated_at+' · '+C.market_status;
+    sub.appendChild(sp);
+  }
+  // 2) sentiment cloud cards (turnover + breadth)
+  var box=document.getElementById('sentiCards');
+  if(box){
+    var cards='';
+    if(C.total_amount_yi!=null){
+      cards+='<div class="card"><div class="stat-lab">两市成交额（云端）</div><div class="stat-num flat">'+fmtN(C.total_amount_yi,1)+' 亿</div><div class="stat-note">'+C.updated_at+' · 东方财富行情</div></div>';
+    }
+    if(C.breadth && C.breadth.up!=null){
+      cards+='<div class="card"><div class="stat-lab">上涨 / 下跌家数（云端）</div><div class="stat-num flat">'+C.breadth.up+' / '+C.breadth.down+'</div><div class="stat-note">平盘 '+C.breadth.flat+' 家 · 全A</div></div>';
+    }
+    if(cards) box.insertAdjacentHTML('afterbegin',cards);
+  }
+  // 3) daily industry ranking chart (cloud)
+  if(window.echarts && C.sectors && ((C.sectors.top&&C.sectors.top.length)||(C.sectors.bottom&&C.sectors.bottom.length))){
+    var ref=document.getElementById('c_ind');
+    if(ref){
+      var row=ref.closest('.row');
+      if(row){
+        var div=document.createElement('div');
+        div.className='row full';
+        div.innerHTML='<div class="chart"><h3>当日行业涨跌榜（云端 · 东方财富行业分类）</h3><div class="desc">'+C.updated_at+' 行情 · 涨跌幅 %</div><div class="echart" style="height:280px"></div></div>';
+        row.after(div);
+        var rows=[];
+        (C.sectors.top||[]).forEach(function(x){ if(x&&x.name!=null) rows.push({name:x.name,pct:x.pct}); });
+        (C.sectors.bottom||[]).forEach(function(x){ if(x&&x.name!=null) rows.push({name:x.name,pct:x.pct}); });
+        if(rows.length){
+          var ch=echarts.init(div.querySelector('.echart'));
+          ch.setOption({
+            backgroundColor:'transparent',
+            tooltip:{trigger:'axis',confine:true,triggerOn:'click',axisPointer:{type:'shadow'},formatter:function(ps){var p=ps[0];var r=rows[p.dataIndex];return r.name+'<br>'+fmtN(r.pct,2)+'%';}},
+            grid:{left:90,right:40,top:20,bottom:24},
+            xAxis:{type:'value',axisLabel:{color:'#9aa7bd',formatter:'{value}%'},splitLine:{lineStyle:{color:'#20293a'}}},
+            yAxis:{type:'category',data:rows.map(function(r){return r.name;}),axisLabel:{color:'#c4cfe0'}},
+            series:[{type:'bar',data:rows.map(function(r){return {value:r.pct,itemStyle:{color:r.pct>=0?'#f2495c':'#1fb573',borderRadius:r.pct>=0?[0,3,3,0]:[3,0,0,3]}};}),label:{show:true,position:'right',color:'#9aa7bd',fontSize:11,formatter:function(p){return fmtN(p.value,2)+'%';}}}]
+          });
+          window.addEventListener('resize',function(){ch.resize();});
+        }
+      }
+    }
+  }
+})();
+
 /* ---------- Live quotes: 5 indices ~10s (Tencent JSONP) ---------- */
 (function(){
   var QUOTES={'上证指数':'sh000001','深证成指':'sz399001','沪深300':'sh000300','创业板指':'sz399006','科创50':'sh000688'};
