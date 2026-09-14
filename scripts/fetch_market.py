@@ -80,8 +80,11 @@ if idx and idx.get("data") and idx["data"].get("diff"):
         })
     amt = 0.0
     for it in data["indices"]:
-        if it["code"] in ("000001", "399106") and it.get("amount"):
-            amt += it["amount"]
+        if it["code"] in ("000001", "399106"):
+            try:
+                amt += float(str(it.get("amount") or 0).replace(",", ""))
+            except (TypeError, ValueError):
+                pass  # 开盘前/接口异常时 amount 可能为 "-"/空字符串, 忽略
     if amt > 0:
         data["total_amount_yi"] = round(amt / 1e8, 1)
 
